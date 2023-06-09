@@ -11,7 +11,7 @@ class Api::V1::ConversationsController < Api::BaseController
 
   def index
     @conversations = paginated_conversations
-    render json: @conversations, each_serializer: REST::ConversationSerializer
+    render json: @conversations, each_serializer: REST::ConversationSerializer, relationships: StatusRelationshipsPresenter.new(@conversations.map(&:last_status), current_user&.account_id)
   end
 
   def read
@@ -32,7 +32,20 @@ class Api::V1::ConversationsController < Api::BaseController
 
   def paginated_conversations
     AccountConversation.where(account: current_account)
-                       .to_a_paginated_by_id(limit_param(LIMIT), params_slice(:max_id, :since_id, :min_id))
+                       .includes(
+                         account: :account_stat,
+                         last_status: [
+                           :media_attachments,
+                           :preview_cards,
+                           :status_stat,
+                           :tags,
+                           {
+                             active_mentions: [account: :account_stat],
+                             account: :account_stat,
+                           },
+                         ]
+                       )
+                       .to_a_paginated_by_id(limit_param(LIMIT), **params_slice(:max_id, :since_id, :min_id))
   end
 
   def insert_pagination_headers
@@ -40,15 +53,11 @@ class Api::V1::ConversationsController < Api::BaseController
   end
 
   def next_path
-    if records_continue?
-      api_v1_conversations_url pagination_params(max_id: pagination_max_id)
-    end
+    api_v1_conversations_url pagination_params(max_id: pagination_max_id) if records_continue?
   end
 
   def prev_path
-    unless @conversations.empty?
-      api_v1_conversations_url pagination_params(min_id: pagination_since_id)
-    end
+    api_v1_conversations_url pagination_params(min_id: pagination_since_id) unless @conversations.empty?
   end
 
   def pagination_max_id

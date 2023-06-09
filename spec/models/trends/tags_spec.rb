@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'rails_helper'
 
 RSpec.describe Trends::Tags do
@@ -22,7 +24,9 @@ RSpec.describe Trends::Tags do
   end
 
   describe '#query' do
-    pending
+    it 'returns a composable query scope' do
+      expect(subject.query).to be_a Trends::Query
+    end
   end
 
   describe '#refresh' do
@@ -40,7 +44,7 @@ RSpec.describe Trends::Tags do
       4.times  { |i| subject.add(tag2, i, today) }
     end
 
-    context do
+    context 'when tag trends are refreshed' do
       before do
         subject.refresh(yesterday + 12.hours)
         subject.refresh(at_time)

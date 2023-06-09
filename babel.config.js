@@ -3,23 +3,29 @@ module.exports = (api) => {
 
   const reactOptions = {
     development: false,
+    runtime: 'automatic',
   };
 
   const envOptions = {
     loose: true,
     modules: false,
     debug: false,
+    include: [
+      'transform-numeric-separator',
+    ],
   };
 
   const config = {
     presets: [
+      '@babel/preset-typescript',
       ['@babel/react', reactOptions],
       ['@babel/env', envOptions],
     ],
     plugins: [
-      ['@babel/proposal-decorators', { legacy: true }],
-      ['react-intl', { messagesDir: './build/messages' }],
+      ['formatjs'],
       'preval',
+      '@babel/plugin-transform-optional-chaining',
+      '@babel/plugin-transform-nullish-coalescing-operator',
     ],
     overrides: [
       {
@@ -67,4 +73,3 @@ module.exports = (api) => {
 
   return config;
 };
-

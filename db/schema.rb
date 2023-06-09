@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2022_08_27_195229) do
+ActiveRecord::Schema.define(version: 2023_06_05_085710) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -188,16 +188,16 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.datetime "requested_review_at"
     t.index "(((setweight(to_tsvector('simple'::regconfig, (display_name)::text), 'A'::\"char\") || setweight(to_tsvector('simple'::regconfig, (username)::text), 'B'::\"char\")) || setweight(to_tsvector('simple'::regconfig, (COALESCE(domain, ''::character varying))::text), 'C'::\"char\")))", name: "search_index", using: :gin
     t.index "lower((username)::text), COALESCE(lower((domain)::text), ''::text)", name: "index_accounts_on_username_and_domain_lower", unique: true
+    t.index ["domain", "id"], name: "index_accounts_on_domain_and_id"
     t.index ["moved_to_account_id"], name: "index_accounts_on_moved_to_account_id", where: "(moved_to_account_id IS NOT NULL)"
     t.index ["uri"], name: "index_accounts_on_uri"
     t.index ["url"], name: "index_accounts_on_url", opclass: :text_pattern_ops, where: "(url IS NOT NULL)"
   end
 
-  create_table "accounts_tags", id: false, force: :cascade do |t|
+  create_table "accounts_tags", primary_key: ["tag_id", "account_id"], force: :cascade do |t|
     t.bigint "account_id", null: false
     t.bigint "tag_id", null: false
     t.index ["account_id", "tag_id"], name: "index_accounts_tags_on_account_id_and_tag_id"
-    t.index ["tag_id", "account_id"], name: "index_accounts_tags_on_tag_id_and_account_id", unique: true
   end
 
   create_table "admin_action_logs", force: :cascade do |t|
@@ -292,6 +292,31 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.datetime "updated_at", null: false
     t.index ["account_id", "status_id"], name: "index_bookmarks_on_account_id_and_status_id", unique: true
     t.index ["status_id"], name: "index_bookmarks_on_status_id"
+  end
+
+  create_table "bulk_import_rows", force: :cascade do |t|
+    t.bigint "bulk_import_id", null: false
+    t.jsonb "data"
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["bulk_import_id"], name: "index_bulk_import_rows_on_bulk_import_id"
+  end
+
+  create_table "bulk_imports", force: :cascade do |t|
+    t.integer "type", null: false
+    t.integer "state", null: false
+    t.integer "total_items", default: 0, null: false
+    t.integer "imported_items", default: 0, null: false
+    t.integer "processed_items", default: 0, null: false
+    t.datetime "finished_at"
+    t.boolean "overwrite", default: false, null: false
+    t.boolean "likely_mismatched", default: false, null: false
+    t.string "original_filename", default: "", null: false
+    t.bigint "account_id", null: false
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.index ["account_id"], name: "index_bulk_imports_on_account_id"
+    t.index ["id"], name: "index_bulk_imports_unconfirmed", where: "(state = 0)"
   end
 
   create_table "canonical_email_blocks", force: :cascade do |t|
@@ -442,7 +467,8 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.datetime "last_status_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["account_id"], name: "index_featured_tags_on_account_id"
+    t.string "name"
+    t.index ["account_id", "tag_id"], name: "index_featured_tags_on_account_id_and_tag_id", unique: true
     t.index ["tag_id"], name: "index_featured_tags_on_tag_id"
   end
 
@@ -461,6 +487,7 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.boolean "show_reblogs", default: true, null: false
     t.string "uri"
     t.boolean "notify", default: false, null: false
+    t.string "languages", array: true
     t.index ["account_id", "target_account_id"], name: "index_follow_requests_on_account_id_and_target_account_id", unique: true
   end
 
@@ -472,6 +499,7 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.boolean "show_reblogs", default: true, null: false
     t.string "uri"
     t.boolean "notify", default: false, null: false
+    t.string "languages", array: true
     t.index ["account_id", "target_account_id"], name: "index_follows_on_account_id_and_target_account_id", unique: true
     t.index ["target_account_id"], name: "index_follows_on_target_account_id"
   end
@@ -519,14 +547,17 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.inet "ip", default: "0.0.0.0", null: false
     t.integer "severity", default: 0, null: false
     t.text "comment", default: "", null: false
+    t.index ["ip"], name: "index_ip_blocks_on_ip", unique: true
   end
 
   create_table "list_accounts", force: :cascade do |t|
     t.bigint "list_id", null: false
     t.bigint "account_id", null: false
     t.bigint "follow_id"
+    t.bigint "follow_request_id"
     t.index ["account_id", "list_id"], name: "index_list_accounts_on_account_id_and_list_id", unique: true
     t.index ["follow_id"], name: "index_list_accounts_on_follow_id", where: "(follow_id IS NOT NULL)"
+    t.index ["follow_request_id"], name: "index_list_accounts_on_follow_request_id", where: "(follow_request_id IS NOT NULL)"
     t.index ["list_id", "account_id"], name: "index_list_accounts_on_list_id_and_account_id"
   end
 
@@ -536,6 +567,7 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "replies_policy", default: 0, null: false
+    t.boolean "exclusive", default: false, null: false
     t.index ["account_id"], name: "index_lists_on_account_id"
   end
 
@@ -733,6 +765,15 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.index ["domain"], name: "index_preview_card_providers_on_domain", unique: true
   end
 
+  create_table "preview_card_trends", force: :cascade do |t|
+    t.bigint "preview_card_id", null: false
+    t.float "score", default: 0.0, null: false
+    t.integer "rank", default: 0, null: false
+    t.boolean "allowed", default: false, null: false
+    t.string "language"
+    t.index ["preview_card_id"], name: "index_preview_card_trends_on_preview_card_id", unique: true
+  end
+
   create_table "preview_cards", force: :cascade do |t|
     t.string "url", default: "", null: false
     t.string "title", default: "", null: false
@@ -855,6 +896,7 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.json "meta"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "blurhash"
     t.index ["var"], name: "index_site_uploads_on_var", unique: true
   end
 
@@ -892,6 +934,17 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.index ["status_id"], name: "index_status_stats_on_status_id", unique: true
   end
 
+  create_table "status_trends", force: :cascade do |t|
+    t.bigint "status_id", null: false
+    t.bigint "account_id", null: false
+    t.float "score", default: 0.0, null: false
+    t.integer "rank", default: 0, null: false
+    t.boolean "allowed", default: false, null: false
+    t.string "language"
+    t.index ["account_id"], name: "index_status_trends_on_account_id"
+    t.index ["status_id"], name: "index_status_trends_on_status_id", unique: true
+  end
+
   create_table "statuses", id: :bigint, default: -> { "timestamp_id('statuses'::text)" }, force: :cascade do |t|
     t.string "uri"
     t.text "text", default: "", null: false
@@ -926,11 +979,10 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.index ["uri"], name: "index_statuses_on_uri", unique: true, opclass: :text_pattern_ops, where: "(uri IS NOT NULL)"
   end
 
-  create_table "statuses_tags", id: false, force: :cascade do |t|
+  create_table "statuses_tags", primary_key: ["tag_id", "status_id"], force: :cascade do |t|
     t.bigint "status_id", null: false
     t.bigint "tag_id", null: false
     t.index ["status_id"], name: "index_statuses_tags_on_status_id"
-    t.index ["tag_id", "status_id"], name: "index_statuses_tags_on_tag_id_and_status_id", unique: true
   end
 
   create_table "system_keys", force: :cascade do |t|
@@ -1035,6 +1087,7 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.inet "sign_up_ip"
     t.boolean "skip_sign_in_token"
     t.bigint "role_id"
+    t.text "settings"
     t.index ["account_id"], name: "index_users_on_account_id"
     t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
     t.index ["created_by_application_id"], name: "index_users_on_created_by_application_id", where: "(created_by_application_id IS NOT NULL)"
@@ -1083,6 +1136,7 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
     t.boolean "enabled", default: true, null: false
     t.datetime "created_at", precision: 6, null: false
     t.datetime "updated_at", precision: 6, null: false
+    t.text "template"
     t.index ["url"], name: "index_webhooks_on_url", unique: true
   end
 
@@ -1120,6 +1174,8 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
   add_foreign_key "blocks", "accounts", name: "fk_4269e03e65", on_delete: :cascade
   add_foreign_key "bookmarks", "accounts", on_delete: :cascade
   add_foreign_key "bookmarks", "statuses", on_delete: :cascade
+  add_foreign_key "bulk_import_rows", "bulk_imports", on_delete: :cascade
+  add_foreign_key "bulk_imports", "accounts", on_delete: :cascade
   add_foreign_key "canonical_email_blocks", "accounts", column: "reference_account_id", on_delete: :cascade
   add_foreign_key "conversation_mutes", "accounts", name: "fk_225b4212bb", on_delete: :cascade
   add_foreign_key "conversation_mutes", "conversations", on_delete: :cascade
@@ -1145,6 +1201,7 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
   add_foreign_key "imports", "accounts", name: "fk_6db1b6e408", on_delete: :cascade
   add_foreign_key "invites", "users", on_delete: :cascade
   add_foreign_key "list_accounts", "accounts", on_delete: :cascade
+  add_foreign_key "list_accounts", "follow_requests", on_delete: :cascade
   add_foreign_key "list_accounts", "follows", on_delete: :cascade
   add_foreign_key "list_accounts", "lists", on_delete: :cascade
   add_foreign_key "lists", "accounts", on_delete: :cascade
@@ -1169,6 +1226,7 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
   add_foreign_key "poll_votes", "polls", on_delete: :cascade
   add_foreign_key "polls", "accounts", on_delete: :cascade
   add_foreign_key "polls", "statuses", on_delete: :cascade
+  add_foreign_key "preview_card_trends", "preview_cards", on_delete: :cascade
   add_foreign_key "report_notes", "accounts", on_delete: :cascade
   add_foreign_key "report_notes", "reports", on_delete: :cascade
   add_foreign_key "reports", "accounts", column: "action_taken_by_account_id", name: "fk_bca45b75fd", on_delete: :nullify
@@ -1183,6 +1241,8 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
   add_foreign_key "status_pins", "accounts", name: "fk_d4cb435b62", on_delete: :cascade
   add_foreign_key "status_pins", "statuses", on_delete: :cascade
   add_foreign_key "status_stats", "statuses", on_delete: :cascade
+  add_foreign_key "status_trends", "accounts", on_delete: :cascade
+  add_foreign_key "status_trends", "statuses", on_delete: :cascade
   add_foreign_key "statuses", "accounts", column: "in_reply_to_account_id", name: "fk_c7fa917661", on_delete: :nullify
   add_foreign_key "statuses", "accounts", name: "fk_9bda1543f7", on_delete: :cascade
   add_foreign_key "statuses", "statuses", column: "in_reply_to_id", on_delete: :nullify
@@ -1224,6 +1284,7 @@ ActiveRecord::Schema.define(version: 2022_08_27_195229) do
      FROM (domain_allows
        LEFT JOIN domain_counts ON (((domain_counts.domain)::text = (domain_allows.domain)::text)));
   SQL
+  add_index "instances", "reverse(('.'::text || (domain)::text)), domain", name: "index_instances_on_reverse_domain"
   add_index "instances", ["domain"], name: "index_instances_on_domain", unique: true
 
   create_view "user_ips", sql_definition: <<-SQL
