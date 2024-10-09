@@ -9,8 +9,9 @@ class ContentSecurityPolicy
     url_from_configured_asset_host || url_from_base_host
   end
 
+# Plus extra data hosts
   def media_hosts
-    [assets_host, cdn_host_value, paperclip_root_url].compact
+    [assets_host, cdn_host_value, paperclip_root_url].concat(extra_data_hosts).compact
   end
 
   def sso_host
@@ -30,6 +31,12 @@ class ContentSecurityPolicy
   end
 
   private
+
+# Compatibility with extra data hosts
+
+  def extra_data_hosts
+    ENV.fetch('EXTRA_DATA_HOSTS', '').split('|')
+  end
 
   def url_from_configured_asset_host
     Rails.configuration.action_controller.asset_host
