@@ -1,4 +1,4 @@
-> [!NOTE]
+Mastodon + BirdUI from Chilemasto > [!NOTE]
 > Want to learn more about Mastodon?
 > Click below to find out more in a video.
 
